@@ -1,19 +1,47 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
+# Maven
+# Build your Java project and run tests with Apache Maven.
+# Add steps that analyze code, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/java
 
 trigger:
 - master
 
 pool:
-  vmImage: ubuntu-latest
+  name: Build Agent
+stages:
+- stage: Build
+  displayName: 'Building jar'
+  jobs:
+  - job: BuildJar
+    displayName: 'Running the job to build the jar'
+    pool:
+      name: Build Agent
 
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
+    steps:
+    - script: |
+        gradle build
+        cp build/libs/jb-hello-world-0.1.0.jar $(Build.ArtifactStagingDirectory)
+      displayName: 'Jar build'
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)'
+        artifact: 'Buildjar'  # Specify a unique artifact name
+        displayName: 'Publish Buildjar artifact'
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+- stage: Release
+  displayName: 'Releasing the Jar'
+  jobs: 
+  - deployment: deployment
+    environment: 'deployment'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifactName: 'Buildjar'  # Specify the same artifact name used in the TrivyScan stage
+              path: $(Build.ArtifactStagingDirectory)
+            displayName: 'Download BuildJar artifact'
+      
+          - script: |
+              java -jar $(Build.ArtifactStagingDirectory)/jb-hello-world-0.1.0.jar
